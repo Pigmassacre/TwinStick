@@ -1,0 +1,21 @@
+Firedamp
+
+A game by Pigmassacre.
+
+It began in 2015 as a libGDX game, with a ranger, a lamp and a stick of
+dynamite, and was never finished. The ranger, the planks and the dirt are the
+original ones.
+
+Made with Godot Engine (godotengine.org); its notices are in GODOT_COPYRIGHT.txt.
+
+Lettering: Bungee, copyright 2023 The Bungee Project Authors (David Jonathan
+Ross), under the SIL Open Font License 1.1. Its licence is in Bungee-OFL.txt.
+
+Music: Ovani Sound. Fantasy Music Pack Vol. 2 ("Mysterious Exploration", "Evil
+Cave", "Small Boss", "Death"), Epic Music Pack ("Underworld", "Bully"),
+Orchestral Ambient Music Pack Vol. 1 ("Rest Now").
+
+Sounds: Ovani Sound's sound packs (Gothic Fantasy, Explosives, Fire, Metal,
+Earth, Foley Inventory, Foley Props, Foley Sports, Foley Movement, Cozy Casual,
+Hollywood Action, Body Horror, Air, Animals, Steampunk, Retro Gaming), and
+FilmCow's Royalty Free Sound Effects Library.
