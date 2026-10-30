@@ -30,6 +30,7 @@ func jump_to(p: Vector2) -> void:
 
 func kick(amount: float) -> void:
 	trauma = minf(trauma + amount * float(Game.settings.shake), 1.0)
+	Inputs.rumble(amount)
 
 
 func _process(delta: float) -> void:

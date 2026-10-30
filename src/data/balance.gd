@@ -16,6 +16,8 @@ const ROLL_TIME := 0.24
 const ROLL_COOLDOWN := 1.0
 ## The original game's stick needed pushing past this before an arrow flew.
 const AIM_DEADZONE := 0.25
+## How far the stick has to go (0 to 1, past the dead zone) to throw a charge.
+const THROW_PUSH := 0.85
 
 # --- arrows -------------------------------------------------------------------
 const ARROW_SPEED := 340.0

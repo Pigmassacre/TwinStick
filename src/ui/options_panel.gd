@@ -21,6 +21,7 @@ func _ready() -> void:
 	_slider(column, "Screen shake", "shake", 0.25)
 	_toggle(column, "Bright flashes", "flashes")
 	_toggle(column, "Aim help (pad, keys, touch)", "aim_assist")
+	_toggle(column, "Rumble", "rumble")
 	if not OS.has_feature("web"):
 		_toggle(column, "Full screen", "fullscreen")
 	var back := UI.button("Back")

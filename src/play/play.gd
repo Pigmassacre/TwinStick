@@ -8,6 +8,7 @@ var layer: CanvasLayer
 var _pause: PauseMenu
 var _touch: Control
 var _skip := false
+var _ui: Control
 
 
 func open(args := {}) -> void:
@@ -31,9 +32,26 @@ func _ready() -> void:
 	_pause = PauseMenu.new()
 	_pause.visible = false
 	ui.add_child(_pause)
-	if Inputs.device == Inputs.Device.TOUCH:
+	_ui = ui
+	_on_device(Inputs.device)
+	Inputs.device_changed.connect(_on_device)
+	Inputs.pad_lost.connect(_on_pad_lost)
+
+
+## The sticks under the thumbs are there for as long as it's played by touch: a tap
+## on a Deck's screen brings them up, the first push of a real stick takes them away.
+func _on_device(device: Inputs.Device) -> void:
+	if device == Inputs.Device.TOUCH and _touch == null:
 		_touch = TouchSticks.new()
-		ui.add_child(_touch)
+		_ui.add_child(_touch)
+	if _touch:
+		_touch.visible = device == Inputs.Device.TOUCH
+
+
+## The controller's gone: the mine waits till it's back.
+func _on_pad_lost() -> void:
+	if is_instance_valid(world) and not get_tree().paused and not world.finished and not world.player.dead:
+		_pause.open()
 
 
 ## The first time down: what this is all about, a line at a time, skippable.

@@ -9,8 +9,10 @@ extends Node
 ## can't lose), `--speed=4` runs it faster, `--shots=1.5,4,9` saves a screenshot
 ## to shots/ at each of those seconds (of game time) and quits after the last,
 ## `--shot-name=x` names them, `--size=1280x720` sizes the window,
-## `--quit-after=60` quits after so many seconds, and `--input-test` plays the
-## controls by sending real input events (src/debug/input_test.gd).
+## `--quit-after=60` quits after so many seconds, `--input-test` plays the
+## controls by sending real input events (src/debug/input_test.gd), `--deck`
+## pretends to be a Steam Deck, and `--no-save` leaves the save alone. tools/test_deck.py
+## plays it from the title with a real (virtual) controller.
 
 const SCREENS := {
 	"title": "res://src/ui/title.gd",
@@ -40,6 +42,7 @@ func _ready() -> void:
 	Game.main = self
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	get_tree().root.min_size = Vector2i(384, 216)
+	_size_first_window()
 	_fit_window()
 	var layer := CanvasLayer.new()
 	layer.layer = 100
@@ -86,6 +89,8 @@ func _ready() -> void:
 		elif arg == "--input-test":
 			Game.autoplay = true
 			add_child(preload("res://src/debug/input_test.gd").new())
+		elif arg == "--pad-log":
+			add_child(preload("res://src/debug/pad_log.gd").new())
 		elif arg.begins_with("--show="):
 			_debug_show = arg.trim_prefix("--show=")
 		elif arg.begins_with("--quit-after="):
@@ -103,7 +108,9 @@ func _ready() -> void:
 
 
 ## The game's pixels are always a whole number of the window's, however big the
-## window is: at least 384 by 216 of them, and however many more fit.
+## window is: at least 384 by 216 of them, and however many more fit. Rounded down
+## (a Deck's 1280 by 800 is 426 by 266, with a pixel to spare round the edge): one
+## game pixel too many and the whole number that fits would be one fewer.
 func _fit_window() -> void:
 	var root := get_tree().root
 	var window := Vector2(root.size)
@@ -113,7 +120,22 @@ func _fit_window() -> void:
 	var by := maxf(1.0, floorf(minf(window.x / BASE_SIZE.x, window.y / BASE_SIZE.y)))
 	root.content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
 	root.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_IGNORE
-	root.content_scale_size = Vector2i(ceili(window.x / by), ceili(window.y / by))
+	root.content_scale_size = Vector2i(floori(window.x / by), floori(window.y / by))
+
+
+## A first window of the biggest whole multiple of the game that fits the screen, up to the project's.
+func _size_first_window() -> void:
+	if DisplayServer.get_name() == "headless" or OS.has_feature("web") or Game.settings.fullscreen:
+		return
+	var window := get_window()
+	var room := Vector2(DisplayServer.screen_get_usable_rect(window.current_screen).size)
+	if room.x <= 0.0 or room.y <= 0.0:
+		return
+	var by := maxf(1.0, floorf(minf(room.x / BASE_SIZE.x, room.y / BASE_SIZE.y)))
+	var fits := Vector2i(BASE_SIZE * by)
+	if fits.x < window.size.x or fits.y < window.size.y:
+		window.size = fits
+		window.move_to_center()
 
 
 func _take_shots(times: Array) -> void:
@@ -183,7 +205,32 @@ func _process(_delta: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	_rescue_focus(event)
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_F11 or (event.physical_keycode == KEY_ENTER and event.alt_pressed):
 			Game.toggle_fullscreen()
 			get_viewport().set_input_as_handled()
+
+
+## A tap on the Deck's screen, or a click on nothing, can leave no button chosen,
+## and then a pad has nothing to move from. It gets the first one back.
+func _rescue_focus(event: InputEvent) -> void:
+	if get_viewport().gui_get_focus_owner() != null or screen == null:
+		return
+	for action in ["ui_up", "ui_down", "ui_left", "ui_right", "ui_accept"]:
+		if event.is_action_pressed(action):
+			var first := _first_button(screen)
+			if first:
+				first.grab_focus()
+				get_viewport().set_input_as_handled()
+			return
+
+
+func _first_button(node: Node) -> Button:
+	for child in node.get_children():
+		if child is Button and child.is_visible_in_tree() and not child.disabled:
+			return child
+		var found := _first_button(child)
+		if found:
+			return found
+	return null

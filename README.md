@@ -43,11 +43,29 @@ WebGL 2.
 |--------------|---------------------|------------|--------------|--------------|
 | Walk         | WASD                | WASD       | Left stick   | Left thumb   |
 | Shoot        | Left click          | Arrow keys | Right stick  | Right thumb  |
-| Change stance| Right click, Q or E | Q or E     | LB           | Stance       |
-| Roll         | Space or Shift      | Space      | RB           | Roll         |
+| Change stance| Right click, Q or E | Q or E     | LB (or X, Y) | Stance       |
+| Roll         | Space or Shift      | Space      | RB, LT or A  | Roll         |
 | Pause        | Esc                 | Esc        | Start        |              |
 
-F11 or Alt+Enter is full screen.
+F11 or Alt+Enter is full screen. On a pad the right trigger shoots too, the way
+the ranger's walking if the stick is let go. In Demolition the stick only aims,
+until it's pushed all the way: that throws one charge, and it takes another push
+to throw the next.
+
+### On a Steam Deck
+
+Build it (`./build_game.sh Linux --zip`), copy `builds/Firedamp-Linux-<commit>.zip`
+over, and unzip it. In Desktop Mode, in Steam, use Add a Game > Add a Non-Steam
+Game on `Firedamp.x86_64`, then go back to Gaming Mode and start it from there.
+Start it through Steam: Steam Input's controller is only seen by a game Steam
+launched. If the sticks do nothing, pick a Gamepad layout under its controller
+settings.
+
+The game knows a Deck by itself (`SteamDeck=1`, or Valve's board name), starts in
+full screen, starts on the pad, and calls the buttons L1, R1 and Menu. It draws at
+3x, 426 by 266 game pixels; docked it fits whatever the screen is. A tap on the
+screen brings up the on-screen sticks and the next push of a real stick takes them
+away. Losing the controller pauses the game.
 
 ### Building
 
@@ -115,10 +133,13 @@ GODOT=../Godot/Godot_v4.7.2-stable_linux.x86_64
 $GODOT --headless --path . --script src/debug/test_levels.gd      # digs 520 levels and checks them
 $GODOT --headless --path . -- --screen=play --autoplay --speed=8  # the game plays itself
 $GODOT --path . -- --screen=play --level=7 --autoplay --invincible --shots=5,10 --size=1536x864
+$GODOT --path . -- --screen=play --input-test                     # sends the controls real input events
+python3 tools/test_deck.py                                        # plays from the title at 1280x800 with a virtual controller
 ```
 
 `--autoplay` is a bot (`src/debug/autopilot.gd`), `--level=` starts on that level
 of the 18 (the bosses are 3, 7, 11, 15 and 17), `--seed=` fixes the seed,
 `--perks=twin,fire` hands those out, `--shots=` saves screenshots to `shots/`,
+`--deck` pretends to be a Steam Deck (with `--size=1280x800` to keep it in a window),
 and `--show=perk` (or `pause`, or `over`) brings up that screen. `src/main.gd`
 has the rest.

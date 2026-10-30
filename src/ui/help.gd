@@ -17,7 +17,7 @@ func _ready() -> void:
 	right.add_theme_constant_override("separation", 3)
 	row.add_child(right)
 	_heading(left, "The ranger")
-	_text(left, _controls())
+	_text(left, Inputs.controls_text())
 	_heading(left, "The lamp")
 	_text(left, "Each hit takes a wick off it, and it shines less far. No wicks, no lamp. While rolling, nothing can hit you.")
 	_text(left, "What's in the dark sleeps until the lamp finds it, or a noise.")
@@ -27,17 +27,6 @@ func _ready() -> void:
 	_text(right, "The green gas does nothing until lit. Then all of it goes, and it will hurt you too.")
 	_heading(right, "The way down")
 	_text(right, "Kill it all and the shaft opens. A cracked wall has something behind it.")
-
-
-func _controls() -> String:
-	match Inputs.device:
-		Inputs.Device.PAD:
-			return "Left stick walks, right stick shoots, LB changes stance, RB rolls."
-		Inputs.Device.TOUCH:
-			return "Left thumb walks, right thumb shoots. Stance and Roll are the buttons."
-		Inputs.Device.KEYBOARD:
-			return "WASD walks, arrow keys shoot, Q changes stance, Space rolls."
-	return "WASD walks, left click shoots, right click changes stance, Space rolls."
 
 
 func _heading(parent: Control, text: String) -> void:

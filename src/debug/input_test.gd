@@ -65,7 +65,7 @@ func _run() -> void:
 	# The pointer, in the window's pixels, should land where the game thinks it is, in its own.
 	var window_size := get_window().size
 	var game_size := get_viewport().get_visible_rect().size
-	print("window ", window_size, ", game ", game_size)
+	print("window ", window_size, ", game ", game_size, ", final transform ", get_window().get_final_transform(), ", stretch ", get_window().content_scale_stretch, " aspect ", get_window().content_scale_aspect, " size ", get_window().content_scale_size)
 	var scale_by := float(window_size.x) / game_size.x
 	var game_scale := floorf(minf(window_size.x / 384.0, window_size.y / 216.0))
 	_check("the scale is a whole number (%.3f)" % scale_by, absf(scale_by - game_scale) < 0.02)
@@ -132,11 +132,35 @@ func _run() -> void:
 	_pad_button(JOY_BUTTON_LEFT_SHOULDER, true)
 	await _wait(0.05)
 	_pad_button(JOY_BUTTON_LEFT_SHOULDER, false)
+	# A tap on the screen brings up the on-screen sticks; a real stick sends them away.
+	var tap := InputEventScreenTouch.new()
+	tap.position = Vector2(100, 100)
+	tap.pressed = true
+	Input.parse_input_event(tap)
+	await _wait(0.1)
+	tap = tap.duplicate()
+	tap.pressed = false
+	Input.parse_input_event(tap)
+	await _wait(0.1)
+	_check("a tap means touch", Inputs.device == Inputs.Device.TOUCH)
+	var sticks: Control = main.screen._touch
+	_check("and the sticks come up", sticks != null and sticks.visible)
+	_pad_axis(JOY_AXIS_LEFT_X, 1.0)
+	await _wait(0.1)
+	_pad_axis(JOY_AXIS_LEFT_X, 0.0)
+	_check("and a stick sends them away", Inputs.device == Inputs.Device.PAD and not sticks.visible)
 	# Pause.
 	_key(KEY_ESCAPE, true)
 	await _wait(0.1)
 	_key(KEY_ESCAPE, false)
 	_check("Esc pauses", get_tree().paused)
+	await _wait(0.1)
+	# With no button chosen, the first press chooses one.
+	get_viewport().gui_release_focus()
+	_pad_button(JOY_BUTTON_DPAD_DOWN, true)
+	await _wait(0.1)
+	_pad_button(JOY_BUTTON_DPAD_DOWN, false)
+	_check("the pad gets the focus back", get_viewport().gui_get_focus_owner() != null)
 	await _wait(0.1)
 	_key(KEY_ESCAPE, true)
 	await _wait(0.1)

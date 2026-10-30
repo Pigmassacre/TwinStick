@@ -34,6 +34,7 @@ var trail_time := 0.0
 var autopilot: Autopilot
 var ghost: SpriteQuad
 var _dust_clock := 0.0
+var _charge_armed := true
 
 
 func setup(the_world: World, at: Vector2) -> void:
@@ -139,10 +140,15 @@ func _read_aim() -> void:
 		Inputs.Device.PAD:
 			var stick := Inputs.pad_aim()
 			if stick != Vector2.ZERO:
-				aim = _assisted(stick)
-				firing = true
-			elif Input.is_action_pressed("fire"):
-				aim = _assisted(Inputs.last_pad_aim)
+				_aim_with_stick(stick)
+			else:
+				_charge_armed = true
+				# With the stick let go, the bow points the way the ranger's walking.
+				var walking := Inputs.move_vector()
+				if walking.length() > 0.2:
+					aim = walking.normalized()
+			if Input.is_action_pressed("fire"):
+				aim = _assisted(aim)
 				firing = true
 		Inputs.Device.KEYBOARD:
 			var keys := Inputs.key_aim()
@@ -151,8 +157,21 @@ func _read_aim() -> void:
 				firing = true
 		Inputs.Device.TOUCH:
 			if Inputs.touch_aim.length() > 0.3:
-				aim = _assisted(Inputs.touch_aim.normalized())
-				firing = true
+				_aim_with_stick(Inputs.touch_aim)
+			else:
+				_charge_armed = true
+
+
+## A stick aims, and in Aim it shoots as well. Powder's too dear to throw away just
+## by aiming, so in Demolition it takes pushing the stick all the way, once a push.
+func _aim_with_stick(stick: Vector2) -> void:
+	aim = _assisted(stick.normalized())
+	if stance == AIM:
+		firing = true
+	elif _charge_armed and stick.length() >= Balance.THROW_PUSH:
+		firing = true
+	elif stick.length() < 0.3:
+		_charge_armed = true
 
 
 ## A little help to those without a mouse: arrows bend to what's nearly in line.
@@ -268,6 +287,7 @@ func _shoot_charge() -> void:
 		swap_stance()
 		return
 	run.powder -= 1
+	_charge_armed = false
 	world.hud_refresh()
 	fire_cooldown = Balance.CHARGE_COOLDOWN * pow(0.9, run.count("quick"))
 	attack_time = 0.0
@@ -311,6 +331,7 @@ func hurt(amount: int, from := Vector2.ZERO) -> void:
 	invulnerable = Balance.INVULNERABLE_AFTER_HIT
 	flash(Color(1.0, 0.25, 0.2), 0.14)
 	world.cam.kick(0.55)
+	Inputs.rumble(1.0)
 	world.freeze_for(0.07)
 	world.fx.blood(pos, 8, Color("941919"), from)
 	world.streak_break()

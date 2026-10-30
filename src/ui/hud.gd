@@ -41,9 +41,7 @@ func _ready() -> void:
 	top.add_theme_constant_override("separation", 3)
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(top)
-	_portrait = TextureRect.new()
-	_portrait.texture = load("res://assets/sprites/portrait.png")
-	_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_portrait = _icon("res://assets/sprites/portrait.png")
 	top.add_child(_portrait)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 1)
@@ -57,13 +55,9 @@ func _ready() -> void:
 	stances.add_theme_constant_override("separation", 2)
 	stances.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(stances)
-	_stance_aim = TextureRect.new()
-	_stance_aim.texture = load("res://assets/sprites/stance_aim.png")
-	_stance_aim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stance_aim = _icon("res://assets/sprites/stance_aim.png")
 	stances.add_child(_stance_aim)
-	_stance_demolition = TextureRect.new()
-	_stance_demolition.texture = load("res://assets/sprites/stance_demolition.png")
-	_stance_demolition.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stance_demolition = _icon("res://assets/sprites/stance_demolition.png")
 	stances.add_child(_stance_demolition)
 	_powder = UI.label("0", UI.ACCENT)
 	stances.add_child(_powder)
@@ -90,8 +84,8 @@ func _ready() -> void:
 	add_child(_depth)
 	_prompt = UI.label("", UI.DIM)
 	_prompt.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	_prompt.offset_left = -150
-	_prompt.offset_right = 150
+	_prompt.offset_left = -190
+	_prompt.offset_right = 190
 	_prompt.offset_top = -30
 	_prompt.offset_bottom = -20
 	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -142,6 +136,16 @@ func _ready() -> void:
 	_exit_arrow = UI.label("v", UI.ACCENT, true)
 	_exit_arrow.visible = false
 	add_child(_exit_arrow)
+
+
+## A picture at its own size, pixel for pixel, however tall its row is.
+func _icon(path: String) -> TextureRect:
+	var t := TextureRect.new()
+	t.texture = load(path)
+	t.stretch_mode = TextureRect.STRETCH_KEEP
+	t.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return t
 
 
 func attach(the_world: World) -> void:
@@ -273,9 +277,13 @@ func _draw() -> void:
 	var view := get_viewport_rect().size
 	# Where the bow is pointing, for those without a crosshair.
 	if Inputs.device != Inputs.Device.MOUSE and not Game.autoplay:
-		var tip: Vector2 = world.cam.to_screen(world.player.pos + world.player.aim * 22.0, Balance.ARROW_HEIGHT)
-		var colour := UI.ACCENT if world.player.stance == Player.DEMOLITION else UI.INK
-		draw_rect(Rect2(tip.round() - Vector2.ONE, Vector2(2, 2)), colour)
+		var demolition: bool = world.player.stance == Player.DEMOLITION
+		var colour := UI.ACCENT if demolition else UI.INK
+		# A dot; and in Demolition, a dotted line, for what's about to cost powder.
+		var dots := 5 if demolition else 1
+		for i in dots:
+			var tip: Vector2 = world.cam.to_screen(world.player.pos + world.player.aim * (22.0 + i * 11.0), Balance.ARROW_HEIGHT)
+			draw_rect(Rect2(tip.round() - Vector2.ONE, Vector2(2, 2)), colour)
 	# The last few, when they've gone quiet: little marks at the edge of the screen.
 	if world.exit_open or world.boss:
 		return

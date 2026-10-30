@@ -6,12 +6,18 @@ extends Node
 enum Device { KEYBOARD, MOUSE, PAD, TOUCH }
 
 signal device_changed(device: Device)
+## A controller has gone away mid-game (out of battery, unplugged).
+signal pad_lost
 
 const KEYS := {
 	"move_left": [KEY_A],
 	"move_right": [KEY_D],
 	"move_up": [KEY_W],
 	"move_down": [KEY_S],
+	"aim_left": [],
+	"aim_right": [],
+	"aim_up": [],
+	"aim_down": [],
 	"shoot_left": [KEY_LEFT],
 	"shoot_right": [KEY_RIGHT],
 	"shoot_up": [KEY_UP],
@@ -39,6 +45,10 @@ const AXES := {
 	"move_right": [JOY_AXIS_LEFT_X, 1.0],
 	"move_up": [JOY_AXIS_LEFT_Y, -1.0],
 	"move_down": [JOY_AXIS_LEFT_Y, 1.0],
+	"aim_left": [JOY_AXIS_RIGHT_X, -1.0],
+	"aim_right": [JOY_AXIS_RIGHT_X, 1.0],
+	"aim_up": [JOY_AXIS_RIGHT_Y, -1.0],
+	"aim_down": [JOY_AXIS_RIGHT_Y, 1.0],
 	"fire": [JOY_AXIS_TRIGGER_RIGHT, 1.0],
 	"roll": [JOY_AXIS_TRIGGER_LEFT, 1.0],
 }
@@ -49,10 +59,15 @@ const MOUSE := {
 }
 
 var device := Device.MOUSE
+## Running on a Steam Deck (or pretending to, with `--deck`).
+var deck := _is_deck()
 ## The pad's prompts: Xbox's letters, or PlayStation's shapes.
 var playstation := false
-## The last way the stick pointed, for firing with the trigger.
-var last_pad_aim := Vector2.RIGHT
+## The pad last used, for the rumble.
+var last_pad := 0
+var _rumble_until := 0
+var _rumble_level := 0.0
+var _pointer_seen := false
 ## What the on-screen sticks say, when played by finger (src/ui/touch_sticks.gd).
 var touch_move := Vector2.ZERO
 var touch_aim := Vector2.ZERO
@@ -84,6 +99,8 @@ func _ready() -> void:
 			InputMap.action_add_event(action, click)
 	for action in ["move_left", "move_right", "move_up", "move_down"]:
 		InputMap.action_set_deadzone(action, 0.18)
+	for action in ["aim_left", "aim_right", "aim_up", "aim_down"]:
+		InputMap.action_set_deadzone(action, Balance.AIM_DEADZONE)
 	InputMap.action_set_deadzone("fire", 0.4)
 	InputMap.action_set_deadzone("roll", 0.5)
 	# The menus answer to a pad and WASD too.
@@ -95,6 +112,26 @@ func _ready() -> void:
 	_add_ui("ui_right", [JOY_BUTTON_DPAD_RIGHT], [KEY_D], JOY_AXIS_LEFT_X, 1.0)
 	if DisplayServer.is_touchscreen_available() and (OS.has_feature("mobile") or OS.has_feature("web_android") or OS.has_feature("web_ios")):
 		device = Device.TOUCH
+	# A Deck's controls are a pad, whatever was last touched.
+	if deck:
+		device = Device.PAD
+	Input.joy_connection_changed.connect(_on_joy_connection)
+
+
+## SteamOS says so when Steam starts the game; otherwise the board is Valve's (the LCD's, and the OLED's).
+static func _is_deck() -> bool:
+	if OS.get_cmdline_user_args().has("--deck") or OS.get_environment("SteamDeck") == "1":
+		return true
+	if OS.get_name() == "Linux":
+		for file: String in ["/sys/devices/virtual/dmi/id/board_name", "/sys/devices/virtual/dmi/id/product_name"]:
+			if FileAccess.file_exists(file) and FileAccess.get_file_as_string(file).strip_edges() in ["Jupiter", "Galileo"]:
+				return true
+	return false
+
+
+func _on_joy_connection(_pad: int, connected: bool) -> void:
+	if not connected and device == Device.PAD:
+		pad_lost.emit()
 
 
 ## Adds pad buttons, keys and a stick direction to a UI action.
@@ -119,7 +156,10 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch or event is InputEventScreenDrag:
 		now = Device.TOUCH
 	elif event is InputEventMouseButton or (event is InputEventMouseMotion and event.relative.length() > 1.0):
-		if event.device != InputEvent.DEVICE_ID_EMULATION:
+		# A window that has just opened gets told where the pointer is: nobody has moved it.
+		if event is InputEventMouseMotion and not _pointer_seen:
+			_pointer_seen = true
+		elif event.device != InputEvent.DEVICE_ID_EMULATION:
 			now = Device.MOUSE
 	elif event is InputEventKey:
 		# The arrows and WASD keep the mouse's aim until the arrows are what's shooting.
@@ -127,6 +167,7 @@ func _input(event: InputEvent) -> void:
 			now = Device.KEYBOARD
 	elif event is InputEventJoypadButton or (event is InputEventJoypadMotion and absf(event.axis_value) > 0.5):
 		now = Device.PAD
+		last_pad = event.device
 		var pad_name := Input.get_joy_name(event.device).to_lower()
 		playstation = pad_name.contains("ps") or pad_name.contains("dualsense") or pad_name.contains("dualshock") \
 			or pad_name.contains("playstation") or pad_name.contains("sony")
@@ -142,17 +183,22 @@ func move_vector() -> Vector2:
 	return Input.get_vector("move_left", "move_right", "move_up", "move_down")
 
 
-## The pad's right stick, with the original game's dead zone.
+## The pad's right stick, with the original game's dead zone: its length is how far it's pushed.
 func pad_aim() -> Vector2:
-	var best := Vector2.ZERO
-	for pad in Input.get_connected_joypads():
-		var v := Vector2(Input.get_joy_axis(pad, JOY_AXIS_RIGHT_X), Input.get_joy_axis(pad, JOY_AXIS_RIGHT_Y))
-		if v.length() > best.length():
-			best = v
-	if best.length() < Balance.AIM_DEADZONE:
-		return Vector2.ZERO
-	last_pad_aim = best.normalized()
-	return last_pad_aim
+	return Input.get_vector("aim_left", "aim_right", "aim_up", "aim_down")
+
+
+## A shake of the pad, 0 to 1. A small one doesn't cut a big one short.
+func rumble(amount: float) -> void:
+	if device != Device.PAD or not Game.settings.rumble:
+		return
+	var now := Time.get_ticks_msec()
+	if now < _rumble_until and amount <= _rumble_level:
+		return
+	var seconds := 0.06 + amount * 0.22
+	_rumble_level = amount
+	_rumble_until = now + int(seconds * 1000.0)
+	Input.start_joy_vibration(last_pad, clampf(amount * 1.2, 0.0, 1.0), clampf(amount, 0.0, 1.0), seconds)
 
 
 ## The arrow keys' direction, or nothing.
@@ -167,9 +213,24 @@ func prompt(action: String) -> String:
 		Device.TOUCH:
 			return {"fire": "right stick", "stance": "stance", "roll": "roll", "pause": "pause", "move": "left stick"}.get(action, "tap")
 		Device.PAD:
+			if deck and not playstation:
+				return {"fire": "right stick", "stance": "L1", "roll": "R1", "pause": "Menu", "move": "left stick", "accept": "A"}.get(action, "A")
 			if playstation:
 				return {"fire": "right stick", "stance": "L1", "roll": "R1", "pause": "Options", "move": "left stick", "accept": "Cross"}.get(action, "Cross")
 			return {"fire": "right stick", "stance": "LB", "roll": "RB", "pause": "Start", "move": "left stick", "accept": "A"}.get(action, "A")
 		Device.KEYBOARD:
 			return {"fire": "arrow keys", "stance": "Q", "roll": "Space", "pause": "Esc", "move": "WASD", "accept": "Space"}.get(action, "Space")
 	return {"fire": "left click", "stance": "right click", "roll": "Space", "pause": "Esc", "move": "WASD", "accept": "click"}.get(action, "Space")
+
+
+## How it's played, in a line, on what the player is playing with now.
+func controls_text() -> String:
+	match device:
+		Device.PAD:
+			var move := prompt("move")
+			return "%s walks, %s shoots, %s changes stance, %s rolls. In Demolition, push the stick all the way to throw." % [move[0].to_upper() + move.substr(1), prompt("fire"), prompt("stance"), prompt("roll")]
+		Device.TOUCH:
+			return "Left thumb walks, right thumb shoots. Stance and Roll are the buttons."
+		Device.KEYBOARD:
+			return "WASD walks, arrow keys shoot, Q changes stance, Space rolls."
+	return "WASD walks, left click shoots, right click changes stance, Space rolls."

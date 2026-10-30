@@ -53,6 +53,11 @@ var paused_for_intro := false
 ## Just for show, behind the title.
 var attract := false
 var _finale := false
+var _perf_frames := 0
+var _perf_sim := 0.0
+var _perf_sim_peak := 0.0
+var _perf_frame := 0.0
+var _perf_frame_peak := 0.0
 var _finale_row := 0
 var _finale_clock := 0.0
 
@@ -70,6 +75,8 @@ func setup(the_run: Run) -> void:
 
 
 func _ready() -> void:
+	if Game.autoplay:
+		RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
 	process_mode = Node.PROCESS_MODE_PAUSABLE
 	_ambient = depth.ambient
 	_env = WorldEnvironment.new()
@@ -347,12 +354,34 @@ func _physics_process(dt: float) -> void:
 	_check_clear(dt)
 	_check_exit()
 	_music_tick(dt)
-	if Game.autoplay and int(time / 30.0) != int((time - dt) / 30.0):
-		_debug_report()
+	if Game.autoplay:
+		_perf_tick()
+		if int(time / 10.0) != int((time - dt) / 10.0):
+			_debug_report()
 
 
-## For testing: how a level is going, every half a minute.
+## For testing: what the simulation and the whole frame are costing.
+func _perf_tick() -> void:
+	var sim := Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
+	var frame := Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+	_perf_frames += 1
+	_perf_sim += sim
+	_perf_sim_peak = maxf(_perf_sim_peak, sim)
+	_perf_frame += frame
+	_perf_frame_peak = maxf(_perf_frame_peak, frame)
+
+
+## For testing: how a level is going, every ten seconds.
 func _debug_report() -> void:
+	if _perf_frames > 0:
+		var rid := get_viewport().get_viewport_rid()
+		print("  perf: %.0f fps; sim %.2f ms avg, %.2f peak; frame %.2f ms avg, %.2f peak; render cpu %.2f gpu %.2f ms; %d draw calls, %d enemies, %d shots" % [Performance.get_monitor(Performance.TIME_FPS), _perf_sim / _perf_frames, _perf_sim_peak, _perf_frame / _perf_frames, _perf_frame_peak,
+			RenderingServer.viewport_get_measured_render_time_cpu(rid), RenderingServer.viewport_get_measured_render_time_gpu(rid), Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), enemies.size(), shots.list.size()])
+	_perf_frames = 0
+	_perf_sim = 0.0
+	_perf_sim_peak = 0.0
+	_perf_frame = 0.0
+	_perf_frame_peak = 0.0
 	var msg := PackedStringArray()
 	for e in enemies:
 		msg.append("%s@%d,%d %s steps=%d" % [e.id, int(e.pos.x / 16), int(e.pos.y / 16), "awake" if e.awake else "asleep", map.flow_at(e.pos)])

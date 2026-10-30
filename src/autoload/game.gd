@@ -14,6 +14,7 @@ const DEFAULTS := {
 	"flashes": true,
 	"fullscreen": false,
 	"aim_assist": true,
+	"rumble": true,
 }
 
 var settings := DEFAULTS.duplicate()
@@ -43,6 +44,8 @@ var start_perks: Array = []
 var fixed_seed := -1
 ## `--speed=8` runs the game that much faster.
 var test_speed := 1.0
+## `--no-save`: for a test that plays like a person, without touching their save.
+var no_save := false
 
 
 func _ready() -> void:
@@ -52,11 +55,23 @@ func _ready() -> void:
 
 
 func load_save() -> void:
+	# On a Steam Deck, full screen, till the player says otherwise.
+	if Inputs.deck:
+		settings.fullscreen = true
+	var args := OS.get_cmdline_user_args()
+	no_save = args.has("--no-save")
 	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) != OK:
-		return
+	if not no_save and cfg.load(SAVE_PATH) == OK:
+		_read_save(cfg)
+	# A test asking for a window size means a window.
+	for arg in args:
+		if arg.begins_with("--size="):
+			settings.fullscreen = false
+
+
+func _read_save(cfg: ConfigFile) -> void:
 	for key: String in DEFAULTS:
-		settings[key] = cfg.get_value("settings", key, DEFAULTS[key])
+		settings[key] = cfg.get_value("settings", key, settings[key])
 	high_scores = cfg.get_value("scores", "high_scores", [])
 	runs_played = cfg.get_value("scores", "runs_played", 0)
 	wins = cfg.get_value("scores", "wins", 0)
@@ -67,7 +82,7 @@ func load_save() -> void:
 
 func save() -> void:
 	# A test run leaves the player's save alone.
-	if autoplay:
+	if autoplay or no_save:
 		return
 	var cfg := ConfigFile.new()
 	for key: String in settings:
